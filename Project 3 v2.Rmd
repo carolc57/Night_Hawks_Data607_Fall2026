@@ -1,0 +1,78 @@
+---
+title: "Project 3 v2 - Carol"
+author: "Night Hawks"
+date: "2026-10-28"
+output: html_document
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = false}
+#install.packages("RPostgres")
+#install.packages("DBI")
+
+library(RPostgres)
+library(DBI)
+library(tibble)
+library(dbplyr)
+library(tidyverse)
+library(ggplot2)
+
+```
+
+Using Postgre SQL, I created a database named "DataScienceSkills" for this project. The password is "Fall2026", and will expire 12/19/2026. For this project, the original data set, "gsearch.com" was found at Kaggle.com (enter link here). I was unable to load it from the shared GitHub respositry into Postgre SQL so loaded directly from my local drive.
+
+```{r}
+# Connect PostgresSQL database to R to upload my "DataScienceSkills" database.
+
+DataScienceSkills = dbConnect(RPostgres::Postgres(),
+       dbname='DataScienceSkills',
+       host= Sys.getenv("local"),
+       port=5432,
+       user='Data607',
+       password=rstudioapi::askForPassword("Enter password"))
+
+```
+
+Let's look at the original file
+
+```{r}
+
+origfile_url <- "https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/gsearch_jobs.csv"
+
+gsearch_jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/gsearch_jobs.csv")
+
+clean_file <- as_tibble(dbGetQuery(DataScienceSkills, "SELECT * FROM gsearch_jobs2"))
+
+head (orig_jobsearch)
+```
+
+This original gsearch_jobs file contains 1,820 rows and 26 columns. Using Postgre SQL, we created five (5) new records, each isolating related variables(columns) while maintaining all 1,820 rows(observations) in each that we will for this analysis. The four tables are "jobs", "job_skills", "job_extensions"and "salary"
+
+Let's look closer at these tables and load them into our environment
+
+```{r jobs}
+# load each table into a tibble using dbGetQuery()
+
+jobs <- as_tibble(dbGetQuery(DataScienceSkills, "SELECT * FROM jobs"))
+head(jobs)
+str(jobs)
+
+job_skills <- as_tibble(dbGetQuery(DataScienceSkills, "SELECT * FROM job_skills"))
+head(job_skills)
+str(job_skills)
+
+job_extensions <- as_tibble(dbGetQuery(DataScienceSkills, "SELECT * FROM job_extensions"))
+head(job_extensions)
+str(job_extensions)
+
+salary <- as_tibble(dbGetQuery(DataScienceSkills, "SELECT * FROM salary"))
+head(salary)
+str(salary)
+
+```
+
+\*\*NOTE(CAROL) - include blurb about each table's structure, ie primary key, foreign key where applicable\\
