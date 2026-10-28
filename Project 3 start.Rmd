@@ -25,7 +25,7 @@ library(ggplot2)
 
 ```
 
-Using Postgre SQL, I created a database named "DataScienceSkills" for this project.  The password is CC624131 (FOR NOW)
+Using Postgre SQL, I created a database named "DataScienceSkills" for this project.  The password is Fall2026
 For this project, the original data set, "gsearch.com" was found at Kaggle.com (enter link here). I was unable to load it from the shared GitHub respositry into Postgre SQL so loaded directly from my local drive. 
 
 ````{r}
@@ -35,7 +35,7 @@ DataScienceSkills = dbConnect(RPostgres::Postgres(),
        dbname='DataScienceSkills',
        host= Sys.getenv("local"),
        port=5432,
-       user='postgres',
+       user='Data607',
        password=rstudioapi::askForPassword("Enter password"))
 
 ````
