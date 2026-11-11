@@ -1,0 +1,264 @@
+---
+title: "Project 3"
+author: "Kingsley"
+format: html
+editor: visual
+---
+
+## IMPORTING LIBRARIES / PACKAGES
+
+```{r}
+install.packages("tidyr")
+
+library(tidyr)
+library(RPostgres)
+library(DBI)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+```
+
+## CONNECTING TO POSTGRESQL
+
+```{r}
+DataScienceSkills = dbConnect(RPostgres::Postgres(),
+                              dbname='DataScienceSkills',
+                              host= Sys.getenv("local"),
+                              port=5432,
+                              user='Data607',
+                              password=rstudioapi::askForPassword("Enter Password"))
+```
+
+```         
+```
+
+## IMPORTING FILES
+
+```{r}
+
+origfile_url <- "https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/gsearch_jobs.csv"
+
+
+gsearch_jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/clean_file.csv")
+
+
+head(gsearch_jobs)
+
+## IMPORTING SALARY TABLE
+
+
+salary <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/salary.csv")
+
+head(salary)
+
+## IMPORTING JOB_SKILLS TABLE
+
+job_skills <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs_skills.csv")
+
+head(job_skills)
+
+## IMPORTING JOBS TABLE
+
+jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs.csv")
+
+head(jobs)
+
+## IMPORTING JOB_EXTENSIONS
+
+job_extension <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/job_extensions.csv")
+
+head(job_extension)
+
+```
+
+## CLEANING TABLES
+
+```{r}
+
+## CLEANING THE SALARY TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(salary)
+
+salary <- salary %>%
+  dplyr::select(-`...1`, -salary_pay) ## removed the column labeled ...1 , salary_pay
+
+names(salary)
+
+head(salary)
+
+## CLEANING JOB_SKILLS TABLE
+
+## REMOVING UNWANTED COLUNMS
+
+names(job_skills)
+
+job_skills <- job_skills %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(job_skills)
+
+## CLEANING THE WIDE DATA FORMAT 
+
+names(job_skills)
+
+job_skills_separated <- tidyr::separate_rows(
+  job_skills,
+  skill_name,
+  sep = ","
+) |>
+  dplyr::mutate(skill_name = stringr::str_trim(skill_name)) |>
+  dplyr::filter(!is.na(skill_name), skill_name != "")
+
+job_skills_separated
+
+## CLEANING THE JOBS TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(jobs)
+
+jobs <- jobs %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(jobs)
+
+## CLEANING THE JOB_EXTENSION TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(job_extension)
+
+job_extension <- job_extension %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(job_extension)
+
+## PARSING OUT THE EXTENSION_TEXT
+
+extension_long <- job_extension |>
+  tidyr::separate_rows(extension_text, sep = "',\\s*'") |>
+  dplyr::mutate(
+    extension_text = stringr::str_remove(extension_text, "^\\['"),
+    extension_text = stringr::str_remove(extension_text, "'\\]$"),
+    extension_text = stringr::str_trim(extension_text)
+  ) |>
+  dplyr::filter(!is.na(extension_text), extension_text != "")
+
+extension_long
+```
+
+## MERGING ALL FOUR TABLES
+
+```{r}
+
+names(jobs)
+names(salary)
+names(job_skills_separated)
+names(extension_long)
+
+valued_jobs <- jobs |>
+  dplyr::left_join(salary, by = "index") |>
+  dplyr::left_join(job_skills_separated, by = "index") |>
+  dplyr::left_join(extension_long, by = "index")
+
+head(valued_jobs)
+
+names(valued_jobs)
+
+```
+
+## EXPLORATORY ANALYSIS - GROUP BY
+
+```{r}
+
+names(valued_jobs)
+head(valued_jobs)
+
+skill_summary <- valued_jobs %>%
+  rename(
+    skill = skill_name,
+    salary = salary_standardized
+  ) %>%
+  mutate(
+    skill_key = str_to_lower(str_trim(skill)),
+    skill_group = case_when(
+      skill_key %in% c("sql", "nosql","pl sql","t sql","postgresql  
+","  mysql","mssql","postgres","postgresql","mysql","no sql","sql") ~ "sql",
+      skill_key %in% c(
+        "numpy", "pandas","matplotlib","matlab" ,"seaborn","matlab  
+", "scipy", "scikit-learn",
+        "sklearn", "pytorch", "tensorflow","jupyter","pyspark"
+      ) ~ "python",
+      skill_key %in% c("ggplot", "ggplot2", "dplyr") ~ "r",
+      skill_key == "vba" ~ "excel",
+      skill_key %in% c("dax", "powerbi", "power bi") ~ "power bi",
+      TRUE ~ skill_key
+    )
+  ) %>%
+  filter(!is.na(skill_group), skill_group != "") %>%
+  group_by(skill_group) %>%
+  summarise(
+    sum_salary = sum(salary, na.rm = TRUE),
+    average_salary = mean(salary, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    percent_contribution = 100 * sum_salary / sum(sum_salary)
+  )
+
+
+
+skill_summary
+
+skill_summary <- skill_summary %>%
+  dplyr::filter(!is.na(skill_group), skill_group != "")
+
+
+top_10_skills <- skill_summary %>%
+  dplyr::slice_max(
+    order_by = sum_salary,
+    n = 10,
+    with_ties = FALSE
+  ) %>%
+  dplyr::arrange(desc(sum_salary))
+
+## ADDING SOME COMMAS AND RENAMING COLUMNS
+
+top_10_skills <- top_10_skills %>%
+  dplyr::mutate(
+    sum_salary = format(sum_salary, big.mark = ",", scientific = FALSE, trim = TRUE),
+    average_salary = formatC(
+      average_salary,
+      format = "f",
+      digits = 2,
+      big.mark = ","
+    ),
+    percent_contribution = round(percent_contribution, 2)
+  ) %>%
+  dplyr::rename(`% contribution` = percent_contribution)
+
+top_10_skills
+```
+
+## VISUALIZATION - TOP 20 SKILLS
+
+```{r}
+
+ggplot2::ggplot(
+  top_10_skills,
+  ggplot2::aes(
+    x = reorder(skill_group, `% contribution`),
+    y = `% contribution`
+  )
+) +
+  ggplot2::geom_col(fill = "DarkGreen") +
+  ggplot2::coord_flip() +
+  ggplot2::labs(
+    title = "Top 10 Skills by Salary Contribution",
+    x = "Hard_Skill",
+    y = "Salary contribution (%)"
+  ) +
+  ggplot2::theme_minimal()
+```
