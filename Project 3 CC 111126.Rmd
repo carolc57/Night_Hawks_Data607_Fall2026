@@ -1,0 +1,312 @@
+---
+title: "Project 3 start"
+author: "Night Hawks"
+date: "2026-10-27"
+output: html_document
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages("RPostgres")
+#install.packages("DBI")
+
+library(RPostgres)
+library(DBI)
+library(tibble)
+library(dbplyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+
+```
+
+Using Postgre SQL, I created a database named "DataScienceSkills" for this project. The password is .... (FOR NOW) For this project, the original data set, "gsearch.com" was found at Kaggle.com (enter link here). I was unable to load it from the shared GitHub respositry into Postgre SQL so loaded directly from my local drive.
+
+
+Let's look at the original file
+
+```{r}
+
+
+origfile_url <- "https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/gsearch_jobs.csv"
+
+
+gsearch_jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/clean_file.csv")
+
+head (gsearch_jobs)
+```
+
+This original gsearch_jobs file contains 1,820 rows and 26 columns. Using Postgre SQL, we created five (5) new records, each isolating related variables(columns) while maintaining all 1,820 rows(observations) in each that we will for this analysis. The five tables are "jobs", "job_skills", "job_links", "job_extensions"and "salary"
+
+Let's look closer at these tables and load them into our environment
+
+
+```{r}
+
+## IMPORTING SALARY TABLE
+
+
+salary <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/salary.csv")
+
+head(salary)
+
+## IMPORTING JOB_SKILLS TABLE
+
+job_skills <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs_skills.csv")
+
+head(job_skills)
+
+## IMPORTING JOBS TABLE
+
+jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs.csv")
+
+head(jobs)
+
+## IMPORTING JOB_EXTENSIONS
+
+job_extension <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/job_extensions.csv")
+
+head(job_extension)
+
+```
+
+\*\*NOTE(CAROL) - include blurb about each table's structure, ie primary key, foreign key where applicable
+
+
+
+
+**including this code as a backup - will explain when we meet at 7pm**
+
+```{r remove special char}
+
+# remove special characters from skills column
+job_skills[4] <- job_skills[4] %>%
+    mutate(
+      across(
+        .cols = everything(),
+        .fns = ~ str_replace_all(.x, "[^[:alnum:]^.]", " ")
+      )
+    )
+
+```
+
+
+
+Data Jobs
+
+We analyzed the "description" field and were able to determine that the majority of jobs contained in this data set can be categorized into three basic categories, with a small number that were too vague to assign a category. By using grepl function to filter on key words we determined that Data Analyst was the most sought after with 627 postings, followed by Data Engineer with 481 postings, then Data Science with 346 postings, with the remaining 366 jobs postings as unclassified, or other.
+
+Note:  If a job description contains both “data analyst” and “data science” keywords, the code will categorize it based on the first condition that matches
+*This section is a repeat of code that Carissa has. Omit from final write up **
+```{r}
+job_cat <- jobs %>%
+  mutate(
+    new_title = case_when(
+      grepl("ETL|pipeline|warehouse|architect",
+            description, ignore.case = TRUE) ~ "Data Engineer",
+
+      grepl("machine learning|modeling|A/B testing",
+            description, ignore.case = TRUE) ~ "Data Science",
+
+      grepl("analyst",
+            description, ignore.case = TRUE) ~ "Data Analyst",
+
+      TRUE ~ "Other"
+    )
+  )
+
+tibble(job_cat)
+
+```
+
+**This section is a repeat of code that Carissa has. Omit from final write up **
+```{r}
+
+## Count of the different title
+
+table(job_cat$new_title)
+
+```
+
+
+
+
+
+
+
+Forbes.com (<https://www.forbes.com/advisor/business/soft-skills-examples/>) defines soft stills as "the characteristics and attributes that allown one person to interact with another person for a specific purpose. They differ from hard skills, which are technical and measurable.
+
+While not explicitly identified as such in our sample, I studied the description column of the data set and observed a treasure trove of what we now understand are soft skills. These soft skills, are also known as transferable skills, are desirable traits that employers screen for. Thus, I parsed the description field of the jobs table for some common soft skills, grouping them by a common phrase into a new table entitled "softskills."
+
+In the same Forbes.com article, entitled "10 Essential Soft Skills", Chris Coussons, founder and CEP of London-based digital markieting company Visionary Marketing, explains why he values his employees’ soft skills more than their technical and educational qualifications. “Technical skills might get someone through the door, but it’s their communication, empathy and willingness to learn that determine how well they work with others, handle pressure and adapt when things inevitably shift,” he states.
+
+Thus we decided to include them in our evaluation of Data Science skills.
+
+```{r softskills}
+
+softskills <- jobs |>
+  transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )
+
+softskills
+```
+
+```{r}
+softskills_freq <- softskills |>
+  select(-1) |>
+  summarise_all(sum) |>
+  gather(skill, freq) |>
+  arrange(desc(freq))
+
+softskills_freq
+
+```
+
+```{r softskills visualizaiton}
+ggplot(softskills_freq,aes(x=reorder(skill, freq), y=freq)) + geom_bar(stat='identity',fill="orange") + xlab('') + ylab('Frequency') + labs(title='Valued Soft Skills - All Jobs') + coord_flip()
+
+
+```
+
+Next we'll look at the top 5 in-demand soft skills for our job categories. 
+```{r soft skills job cat}
+# Data analyst soft skills 
+
+freq_softskills_analyst<- job_cat |>
+  filter(new_title == 'Data Analyst') %>%   
+   transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )  |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+
+
+# Soft skills data science
+freq_softskills_science<- job_cat |>
+  filter(new_title == 'Data Science') %>%   
+   transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  ) |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+
+
+# Soft skills data engineer
+freq_softskills_engineer <- job_cat |>
+  filter(new_title == 'Data Engineer') %>%   
+   transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )  |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+
+
+```
+
+Visualization:  Top 5 in-demand Soft Skills 
+```{r create plots}
+# Create and display the first plot
+plot1 <- ggplot(
+  freq_softskills_analyst,
+  aes(x=reorder(skill, freq), y=freq)
+  ) + 
+  geom_col(fill="purple") +
+  coord_flip()+
+  labs(
+    title='Data Analyst', 
+    x = "",
+    y = "Count"
+  ) + 
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45, hjust=1))        
+
+# Create and display the second plot
+plot2 <- ggplot(
+  freq_softskills_science,
+  aes(x = reorder(skill, freq), y = freq)
+  ) +
+  geom_col(fill = "yellow") +
+  coord_flip() +
+  labs(
+    title = "Data Science",
+    x = "",
+    y = "Count"
+  ) +
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45,hjust=1)) 
+
+# Create and display the third plot
+plot3 <- ggplot(
+  freq_softskills_engineer,
+  aes(x=reorder(skill, freq), y=freq)
+  ) + 
+  geom_col(fill="brown") +
+  coord_flip()+
+  labs(
+    title='Data Engineer', 
+    x = "",
+    y = "Count"
+  ) + 
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45, hjust=1))    
+
+
+combined_plots <- grid.arrange(plot1, plot2, plot3, ncol = 3, top = "Top 5 Desired Soft skills")
+
+combined_plots
+```
+
+These plots illustrate the 5 most valued soft skills for the following jobs are:
+
+Data analyst: collaboration, time management, communication , leadership and critical analysis.
+
+Data science: collaboration, communication, leadership, visualization and critical analysis.
+
+Data analyst:  collaboration, communication,  time management, leadership, and visualization.
+
+
