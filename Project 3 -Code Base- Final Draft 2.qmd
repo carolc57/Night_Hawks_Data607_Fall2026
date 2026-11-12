@@ -579,7 +579,7 @@ Overall, the results suggest that job category and work location may influence s
 
 ### B - Top 5 Soft Skills
 
-A recent [Forbes.com](https://www.forbes.com/advisor/business/soft-skills-examples/ "Soft Skills") article entitled "\`10 Essential Soft Skills (With Examples) defines soft stills as "the characteristics and attributes that allow one person to interact with another person for a specific purpose. They differ from hard skills, which are technical and measurable.
+A recent [Forbes.com](https://www.forbes.com/advisor/business/soft-skills-examples/ "Soft Skills") article entitled "10 Essential Soft Skills (With Examples)" defines soft stills as "the characteristics and attributes that allow one person to interact with another person for a specific purpose." They differ from hard skills, which are technical and measurable.
 
 While not explicitly identified as such in our sample, we studied the description column of the data set and observed a treasure trove of what we now understand are soft skills. These soft skills, are also known as transferable skills, are desirable traits that employers usually screen for. Thus, we parsed the description field of the jobs table for some common soft skills, grouping them by a common phrase into a new table entitled "soft skills."
 
