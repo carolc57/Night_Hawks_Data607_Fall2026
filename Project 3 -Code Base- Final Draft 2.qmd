@@ -1,0 +1,606 @@
+---
+title: "Project 3"
+author: "Carol Campbell0, Caresse Cross, Kingsley Kpoku"
+date: November 12, 2026
+format: html
+editor: visual
+---
+
+## Importing Libraries/ Packages
+
+```{r}
+
+library(tidyr)
+library(DBI)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Importing Files
+
+```{r}
+
+origfile_url <- "https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/gsearch_jobs.csv"
+
+
+gsearch_jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/clean_file.csv")
+
+
+head(gsearch_jobs)
+
+## IMPORTING SALARY TABLE
+
+
+salary <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/salary.csv")
+
+head(salary)
+
+## IMPORTING JOB_SKILLS TABLE
+
+job_skills <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs_skills.csv")
+
+head(job_skills)
+
+## IMPORTING JOBS TABLE
+
+jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/jobs.csv")
+
+head(jobs)
+
+# IMPORTING JOB_EXTENSIONS
+
+job_extension <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/job_extensions.csv")
+
+head(job_extension)
+```
+
+## Assessing Missing Values in location and description tokens
+
+```{r}
+
+gsearch_jobs %>%
+  summarise(
+    across(
+      c(location, description_tokens),
+      list(
+        missing = ~sum(is.na(.)),
+        percent_missing = ~round(mean(is.na(.)) * 100, 2)
+      )
+    )
+  ) %>%
+  print(width = Inf)
+```
+
+## Classifying Data-Related Job Categories
+
+Job postings are classified into four categories: Data Engineer, Data Science, Data Analyst, and Other. The classification uses keywords found in job descriptions to identify the type of role.
+
+```{r categorize jobs}
+jobs <- jobs %>%
+  mutate(
+    job_cat = case_when(
+      grepl("ETL|pipeline|warehouse|architect",
+            description, ignore.case = TRUE) ~ "Data Engineer",
+      
+      grepl("machine learning|modeling|A/B testing",
+            description, ignore.case = TRUE) ~ "Data Science",
+      
+      grepl("analyst",
+            description, ignore.case = TRUE) ~ "Data Analyst",
+      
+      TRUE ~ "Other"
+    )
+  )
+
+```
+
+## Distribution of Job Categories
+
+```{r}
+table(jobs$job_cat)
+```
+
+## Extracting City and State Information
+
+Job postings located in the United States are filtered from the dataset to extract city and state from description. State abbreviations are then converted into their full state names.
+
+```{r}
+united_s <- gsearch_jobs %>%
+  filter(grepl("United States", location, ignore.case = TRUE)) %>%
+  mutate(
+    base_location = str_extract(description, "[A-Z][a-z]+, [A-Z]{2}|[A-Z][a-z]+, [A-Z][a-z]+"),
+    base_location = str_extract(base_location, "[A-Z]{2}$"),
+    base_location = state.name[match(base_location, state.abb)]
+    )
+```
+
+```{r combine locations to jobs}
+jobs <- jobs %>%
+  left_join(
+    united_s %>% select(index, base_location),
+    by = "index"
+  ) %>%
+  mutate(
+    state_abbr = str_extract(
+      location,
+      regex("[A-Z]{2}$", ignore_case = TRUE)
+    ),
+    state_abbr = str_to_upper(state_abbr),
+    base_location = coalesce(
+      base_location,
+      state.name[match(state_abbr, state.abb)]
+    ),
+    base_location = ifelse(
+      is.na(base_location),
+      "Remote/Hybrid",
+      base_location
+    )
+  ) %>%
+  select(-state_abbr, -location, -via, -work_from_home)
+```
+
+## Distribution of Job Postings by State
+
+The five states with the highest number of job postings are identified and displayed in a bar chart. Remote and hybrid postings are excluded from this comparison.
+
+```{r}
+top_5_states <- jobs %>%
+  filter(base_location != "Remote/Hybrid", !is.na(base_location)) %>%
+  count(base_location, sort = TRUE) %>%
+  slice_max(order_by = n, n = 5, with_ties = FALSE)
+
+ggplot(top_5_states, aes(x = reorder(base_location, n), y = n)) +
+  geom_col(fill = "darkolivegreen3") +
+  coord_flip() +
+  labs(
+    title = "Top 5 States by Job Postings",
+    x = "State",
+    y = "Number of Job Postings"
+  )
+```
+
+## Combining Salary and Location Data
+
+Standardized salary information is added to the job postings dataset by matching records using the job index. This allows salary information to be compared across job categories and locations.
+
+```{r}
+plot_data <- salary %>%
+  select(index, salary_standardized) %>%
+  left_join(
+    jobs %>% select(index, base_location, job_cat),
+    by = "index"
+  )
+```
+
+```{r}
+ggplot(plot_data %>%
+         filter(
+           !is.na(base_location),
+           !is.na(job_cat),
+           !is.na(salary_standardized)
+         ) %>%
+         group_by(base_location) %>%
+         filter(n() >= 5) %>%
+         ungroup(),
+       aes(x = base_location,
+           y = salary_standardized,
+           fill = job_cat)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Average Salaries by Job Category and Location",
+    x = "Location",
+    y = "Average Salary",
+    fill = "Job Category"
+  ) +
+  scale_y_continuous(labels = scales::dollar) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+```
+
+## Soft Skills
+
+Next, we will look at soft skills in Data Science.
+
+```{r}
+softskills <- jobs |>
+  transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )
+
+softskills
+```
+
+```{r}
+softskills_freq <- softskills |>
+  select(-1) |>
+  summarise_all(sum) |>
+  gather(skill, freq) |>
+  arrange(desc(freq))
+
+softskills_freq
+```
+
+```{r softskills visualizaiton}
+  ggplot(softskills_freq,aes(x=reorder(skill, freq), y=freq)) + geom_bar(stat='identity',fill="orange") + xlab('') + ylab('Frequency') + labs(title='Valued Soft Skills - All Jobs') + coord_flip()
+  
+  
+```
+
+#### Next we'll look at the top 5 in-demand soft skills for our job categories.
+
+```{r Data analyst soft skills}
+freq_softskills_analyst<- jobs |>
+  filter(job_cat == 'Data Analyst') %>%   
+  transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )  |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+```
+
+```{r softskills data science}
+freq_softskills_science<- jobs |>
+  filter(job_cat == 'Data Science') %>%   
+  transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  ) |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+```
+
+```{r softskills data engineer}
+freq_softskills_engineer <- jobs |>
+  filter(job_cat == 'Data Engineer') %>%   
+  transmute(
+    Communication     = grepl("communicat", description, ignore.case = TRUE),
+    Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
+    Confidence        = grepl("confiden", description, ignore.case = TRUE),
+    Critical_analysis = grepl("critical", description, ignore.case = TRUE),
+    Leadership        = grepl("leader", description, ignore.case = TRUE),
+    Problem_solving   = grepl("problem solving", description, ignore.case = TRUE),
+    Time_Mgmnt        = grepl("manage", description, ignore.case = TRUE),
+    Visualization     = grepl("visualization", description, ignore.case = TRUE)
+  )  |>
+  summarise(across(everything(), sum)) |>
+  tidyr::pivot_longer(
+    everything(),
+    names_to = "skill",
+    values_to = "freq"
+  ) |>
+  slice_max(freq, n = 5)
+```
+
+## Visualization: Top 5 in-demand Soft Skills
+
+```{r create plot}
+plot1 <- ggplot(
+  freq_softskills_analyst,
+  aes(x=reorder(skill, freq), y=freq)
+) + 
+  geom_col(fill="purple") +
+  coord_flip()+
+  labs(
+    title='Data Analyst', 
+    x = "",
+    y = "Count"
+  ) + 
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45, hjust=1))        
+
+
+```
+
+```{r Create and display the second plot}
+plot2 <- ggplot(
+  freq_softskills_science,
+  aes(x = reorder(skill, freq), y = freq)
+) +
+  geom_col(fill = "yellow") +
+  coord_flip() +
+  labs(
+    title = "Data Science",
+    x = "",
+    y = "Count"
+  ) +
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45,hjust=1)) 
+
+```
+
+```{r}
+plot3 <- ggplot(
+  freq_softskills_engineer,
+  aes(x=reorder(skill, freq), y=freq)
+) + 
+  geom_col(fill="brown") +
+  coord_flip()+
+  labs(
+    title='Data Engineer', 
+    x = "",
+    y = "Count"
+  ) + 
+  theme(plot.title = element_text(size = 10)) + theme(axis.text.x=element_text(angle=45, hjust=1))    
+
+```
+
+```{r combined plots softskills}
+combined_plots <- grid.arrange(plot1, plot2, plot3, ncol = 3, top = "Top 5 Desired Soft skills")
+
+combined_plots
+```
+
+These plots illustrate the 5 most valued soft skills for the following jobs are:
+
+- Data Analyst: collaboration, time management, communication , leadership and critical analysis.
+
+- Data Science: collaboration, communication, leadership, visualization and critical analysis.
+
+- Data Engineer: collaboration, communication, time management, leadership, and visualization.
+
+## Tidying/cleaning of Tables
+
+```{r}
+
+## CLEANING THE SALARY TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(salary)
+
+salary <- salary %>%
+  dplyr::select(-`...1`, -salary_pay) ## removed the column labeled ...1 , salary_pay
+
+names(salary)
+
+head(salary)
+
+## CLEANING JOB_SKILLS TABLE
+
+## REMOVING UNWANTED COLUNMS
+
+names(job_skills)
+
+job_skills <- job_skills %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(job_skills)
+
+## CLEANING THE WIDE DATA FORMAT 
+
+names(job_skills)
+
+job_skills_separated <- tidyr::separate_rows(
+  job_skills,
+  skill_name,
+  sep = ","
+) |>
+  dplyr::mutate(skill_name = stringr::str_trim(skill_name)) |>
+  dplyr::filter(!is.na(skill_name), skill_name != "")
+
+job_skills_separated
+
+## CLEANING THE JOBS TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(jobs)
+
+jobs <- jobs %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(jobs)
+
+## CLEANING THE JOB_EXTENSION TABLE
+
+## REMOVING UNWANTED COLUMNS
+
+names(job_extension)
+
+job_extension <- job_extension %>%
+  dplyr::select(-`...1`) ## removed the column labeled ...1
+
+head(job_extension)
+
+## PARSING OUT THE EXTENSION_TEXT
+
+extension_long <- job_extension |>
+  tidyr::separate_rows(extension_text, sep = "',\\s*'") |>
+  dplyr::mutate(
+    extension_text = stringr::str_remove(extension_text, "^\\['"),
+    extension_text = stringr::str_remove(extension_text, "'\\]$"),
+    extension_text = stringr::str_trim(extension_text)
+  ) |>
+  dplyr::filter(!is.na(extension_text), extension_text != "")
+
+extension_long
+```
+
+## Merging All Four Tables
+
+```{r}
+
+names(jobs)
+names(salary)
+names(job_skills_separated)
+names(extension_long)
+
+valued_jobs <- jobs |>
+  dplyr::left_join(salary, by = "index") |>
+  dplyr::left_join(job_skills_separated, by = "index") |>
+  dplyr::left_join(extension_long, by = "index")
+
+head(valued_jobs)
+
+names(valued_jobs)
+
+```
+
+## Exploratory Analysis - Group By
+
+```{r}
+
+names(valued_jobs)
+head(valued_jobs)
+
+skill_summary <- valued_jobs %>%
+  rename(
+    skill = skill_name,
+    salary = salary_standardized
+  ) %>%
+  mutate(
+    skill_key = str_to_lower(str_trim(skill)),
+    skill_group = case_when(
+      skill_key %in% c("sql", "nosql","pl sql","t sql","postgresql  
+","  mysql","mssql","postgres","postgresql","mysql","no sql","sql") ~ "sql",
+      skill_key %in% c(
+        "numpy", "pandas","matplotlib","matlab" ,"seaborn","matlab  
+", "scipy", "scikit-learn",
+        "sklearn", "pytorch", "tensorflow","jupyter","pyspark"
+      ) ~ "python",
+      skill_key %in% c("ggplot", "ggplot2", "dplyr") ~ "r",
+      skill_key == "vba" ~ "excel",
+      skill_key %in% c("dax", "powerbi", "power bi") ~ "power bi",
+      TRUE ~ skill_key
+    )
+  ) %>%
+  filter(!is.na(skill_group), skill_group != "") %>%
+  group_by(skill_group) %>%
+  summarise(
+    sum_salary = sum(salary, na.rm = TRUE),
+    average_salary = mean(salary, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    percent_contribution = 100 * sum_salary / sum(sum_salary)
+  )
+
+
+
+skill_summary
+
+skill_summary <- skill_summary %>%
+  dplyr::filter(!is.na(skill_group), skill_group != "")
+
+
+top_10_skills <- skill_summary %>%
+  dplyr::slice_max(
+    order_by = sum_salary,
+    n = 10,
+    with_ties = FALSE
+  ) %>%
+  dplyr::arrange(desc(sum_salary))
+
+## ADDING SOME COMMAS AND RENAMING COLUMNS
+
+top_10_skills <- top_10_skills %>%
+  dplyr::mutate(
+    sum_salary = format(sum_salary, big.mark = ",", scientific = FALSE, trim = TRUE),
+    average_salary = formatC(
+      average_salary,
+      format = "f",
+      digits = 2,
+      big.mark = ","
+    ),
+    percent_contribution = round(percent_contribution, 2)
+  ) %>%
+  dplyr::rename(`% contribution` = percent_contribution)
+
+top_10_skills
+```
+
+## Visualization of Top 10  Hard Skills
+
+```{r}
+
+ggplot2::ggplot(
+  top_10_skills,
+  ggplot2::aes(
+    x = reorder(skill_group, `% contribution`),
+    y = `% contribution`
+  )
+) +
+  ggplot2::geom_col(fill = "DarkGreen") +
+  ggplot2::coord_flip() +
+  ggplot2::labs(
+    title = "Top 10 Hard Skills by Salary Contribution",
+    x = "Hard Skill",
+    y = "Salary contribution (%)"
+  ) +
+  ggplot2::theme_minimal()
+```
+
+## Team Conclusion & Analytics
+
+### A - Location and Job Category
+
+We find that Missouri has the highest number of data-related non-remote job postings, with just over 300 postings. Oklahoma and Kansas follow with approximately 85 and 82 postings, respectively. California and Arkansas round out the top five, with fewer than 60 postings each.
+
+With the number of postings for remote/hybrid jobs, we excluded it in order to not skew the data. Overall, the results suggest that Missouri had a much higher concentration of job postings in this dataset than the other four states. However, these findings reflect only the job postings collected in this dataset and do not necessarily represent the overall demand for data-related jobs in each state.
+
+Our second graph shows that average salaries vary across job categories and locations. Remote/Hybrid positions generally have the highest average salaries, particularly in the Data Science and Other categories, which both exceed \$240,000. California also shows relatively high average salaries for Data Science positions, at approximately \$158,000. Missouri has its highest average salary in the Data Analyst category, at around \$145,000, while Oklahoma has fewer job categories represented in the data set. Rhode Island shows similar average salaries of approximately \$104,000 across the three categories represented.
+
+Overall, the results suggest that job category and work location may influence salary levels. Remote/Hybrid positions appear to offer higher salaries in this dataset, although the results should be interpreted cautiously because some locations and job categories may have fewer postings than others.
+
+### B - Top 5 Soft Skills
+
+A recent [Forbes.com](https://www.forbes.com/advisor/business/soft-skills-examples/ "Soft Skills") article entitled "\`10 Essential Soft Skills (With Examples) defines soft stills as "the characteristics and attributes that allow one person to interact with another person for a specific purpose. They differ from hard skills, which are technical and measurable.
+
+While not explicitly identified as such in our sample, we studied the description column of the data set and observed a treasure trove of what we now understand are soft skills. These soft skills, are also known as transferable skills, are desirable traits that employers usually screen for. Thus, we parsed the description field of the jobs table for some common soft skills, grouping them by a common phrase into a new table entitled "soft skills."
+
+In the same Forbes.com article, Chris Coussons, founder and CEP of London-based digital marketing company Visionary Marketing, explains why he values his employees’ soft skills more than their technical and educational qualifications. “Technical skills might get someone through the door, but it’s their communication, empathy and willingness to learn that determine how well they work with others, handle pressure and adapt when things inevitably shift,” he states.
+
+As previously stated, our analysis revealed that these are the top 5 Soft Skills by job type:
+
+- Data analyst: collaboration, time management, communication , leadership and critical analysis.
+
+- Data Science: collaboration, communication, leadership, visualization and critical analysis.
+
+- Data Engineer: collaboration, communication, time management, leadership, and visualization.
+
+All three fields rely heavily on core interpersonal and leadership but their primary focus differs: **Data Engineers** and **Data Analysts** prioritize time management to optimize workflows, while **Data Scientists** and **Data Engineers** leverage visualization to translate complex insights into clear visual stories.
+
+### C - Top 10 Hard Skills - Analytics Findings
+
+SQL leads the top 10 hard skills by salary contribution at about \*19%, followed by Python at roughly \*\*13%\* and Excel at \*12%. Power BI contributes about \*\*10%\*, with R and Tableau also making notable contributions. Together, these results suggest that employers value a mix of data querying, programming, spreadsheet, and visualization skills in the roles represented in this analysis.
+
+The chart can also help individuals identify skills to consider developing when preparing for data-focused jobs. SQL, Python, and Excel stand out, while skills with smaller contributions—such as Snowflake, SAS, and AWS—should not be dismissed. They may matter for specific employers or roles, even though their contribution is lower in this top-10 comparison.
+
+### Conclusion
+
+The findings point to a broad skill set rather than one tool alone: SQL, Python, Excel, and Power BI are prominent, while R, Tableau, Snowflake, SAS, AWS, and PowerPoint also appear among the top 10. People exploring data careers can use this list to guide their learning, while checking the requirements of the particular roles and employers they are targeting. These percentages describe salary contribution in the analyzed data; they do not prove that a skill causes higher pay or directly measure job demand.
