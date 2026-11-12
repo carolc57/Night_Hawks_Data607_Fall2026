@@ -48,7 +48,11 @@ jobs <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_
 
 head(jobs)
 
+# IMPORTING JOB_EXTENSIONS
 
+job_extension <- readr::read_csv("https://raw.githubusercontent.com/carolc57/Night_Hawks_Data607_Fall2026/refs/heads/main/job_extensions.csv")
+
+head(job_extension)
 ```
 
 ## Assessing Missing Values in location and description tokens
@@ -133,7 +137,7 @@ jobs <- jobs %>%
       base_location
     )
   ) %>%
-  select(-state_abbr, -location, -description, -via, -work_from_home)
+  select(-state_abbr, -location, -via, -work_from_home)
 ```
 
 ## Distribution of Job Postings by State
@@ -201,13 +205,7 @@ ggplot(plot_data %>%
 
 ## Soft Skills
 
-Forbes.com (<https://www.forbes.com/advisor/business/soft-skills-examples/>) defines soft stills as "the characteristics and attributes that allown one person to interact with another person for a specific purpose. They differ from hard skills, which are technical and measurable.
-
-While not explicitly identified as such in our sample, I studied the description column of the data set and observed a treasure trove of what we now understand are soft skills. These soft skills, are also known as transferable skills, are desirable traits that employers screen for. Thus, I parsed the description field of the jobs table for some common soft skills, grouping them by a common phrase into a new table entitled "softskills."
-
-In the same Forbes.com article, entitled "10 Essential Soft Skills", Chris Coussons, founder and CEP of London-based digital markieting company Visionary Marketing, explains why he values his employees’ soft skills more than their technical and educational qualifications. “Technical skills might get someone through the door, but it’s their communication, empathy and willingness to learn that determine how well they work with others, handle pressure and adapt when things inevitably shift,” he states.
-
-Thus we decided to include them in our evaluation of Data Science skills.
+Next, we will look at soft skills in Data Science.
 
 ```{r}
 softskills <- jobs |>
@@ -244,8 +242,8 @@ softskills_freq
 #### Next we'll look at the top 5 in-demand soft skills for our job categories.
 
 ```{r Data analyst soft skills}
-freq_softskills_analyst<- job_cat |>
-  filter(new_title == 'Data Analyst') %>%   
+freq_softskills_analyst<- jobs |>
+  filter(job_cat == 'Data Analyst') %>%   
   transmute(
     Communication     = grepl("communicat", description, ignore.case = TRUE),
     Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
@@ -266,8 +264,8 @@ freq_softskills_analyst<- job_cat |>
 ```
 
 ```{r softskills data science}
-freq_softskills_science<- job_cat |>
-  filter(new_title == 'Data Science') %>%   
+freq_softskills_science<- jobs |>
+  filter(job_cat == 'Data Science') %>%   
   transmute(
     Communication     = grepl("communicat", description, ignore.case = TRUE),
     Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
@@ -288,8 +286,8 @@ freq_softskills_science<- job_cat |>
 ```
 
 ```{r softskills data engineer}
-freq_softskills_engineer <- job_cat |>
-  filter(new_title == 'Data Engineer') %>%   
+freq_softskills_engineer <- jobs |>
+  filter(job_cat == 'Data Engineer') %>%   
   transmute(
     Communication     = grepl("communicat", description, ignore.case = TRUE),
     Collaborative     = grepl("collaborat|group|team", description, ignore.case = TRUE),
@@ -565,3 +563,33 @@ ggplot2::ggplot(
   ) +
   ggplot2::theme_minimal()
 ```
+
+## Team Conclusion & Analytics
+
+### A - Location and Job Category
+
+We find that Missouri has the highest number of data-related non-remote job postings, with just over 300 postings. Oklahoma and Kansas follow with approximately 85 and 82 postings, respectively. California and Arkansas round out the top five, with fewer than 60 postings each.
+
+With the number of postings for remote/hybrid jobs, we excluded it in order to not skew the data. Overall, the results suggest that Missouri had a much higher concentration of job postings in this dataset than the other four states. However, these findings reflect only the job postings collected in this dataset and do not necessarily represent the overall demand for data-related jobs in each state.
+
+Our second graph shows that average salaries vary across job categories and locations. Remote/Hybrid positions generally have the highest average salaries, particularly in the Data Science and Other categories, which both exceed \$240,000. California also shows relatively high average salaries for Data Science positions, at approximately \$158,000. Missouri has its highest average salary in the Data Analyst category, at around \$145,000, while Oklahoma has fewer job categories represented in the dataset. Rhode Island shows similar average salaries of approximately \$104,000 across the three categories represented.
+
+Overall, the results suggest that job category and work location may influence salary levels. Remote/Hybrid positions appear to offer higher salaries in this dataset, although the results should be interpreted cautiously because some locations and job categories may have fewer postings than others.
+
+### B - Top 5 Soft Skills
+
+Forbes.com (<https://www.forbes.com/advisor/business/soft-skills-examples/>) defines soft stills as "the characteristics and attributes that allow one person to interact with another person for a specific purpose. They differ from hard skills, which are technical and measurable.
+
+While not explicitly identified as such in our sample, I studied the description column of the data set and observed a treasure trove of what we now understand are soft skills. These soft skills, are also known as transferable skills, are desirable traits that employers screen for. Thus, I parsed the description field of the jobs table for some common soft skills, grouping them by a common phrase into a new table entitled "softskills."
+
+In the same Forbes.com article, entitled "10 Essential Soft Skills", Chris Coussons, founder and CEP of London-based digital markieting company Visionary Marketing, explains why he values his employees’ soft skills more than their technical and educational qualifications. “Technical skills might get someone through the door, but it’s their communication, empathy and willingness to learn that determine how well they work with others, handle pressure and adapt when things inevitably shift,” he states.
+
+### C - Top 10 Hard Skills - Analytics Findings 
+
+SQL leads the top 10 hard skills by salary contribution at about \*19%, followed by Python at roughly \*\*13%\* and Excel at \*12%. Power BI contributes about \*\*10%\*, with R and Tableau also making notable contributions. Together, these results suggest that employers value a mix of data querying, programming, spreadsheet, and visualization skills in the roles represented in this analysis.
+
+The chart can also help individuals identify skills to consider developing when preparing for data-focused jobs. SQL, Python, and Excel stand out, while skills with smaller contributions—such as Snowflake, SAS, and AWS—should not be dismissed. They may matter for specific employers or roles, even though their contribution is lower in this top-10 comparison.
+
+### Conclusion
+
+The findings point to a broad skill set rather than one tool alone: SQL, Python, Excel, and Power BI are prominent, while R, Tableau, Snowflake, SAS, AWS, and PowerPoint also appear among the top 10. People exploring data careers can use this list to guide their learning, while checking the requirements of the particular roles and employers they are targeting. These percentages describe salary contribution in the analyzed data; they do not prove that a skill causes higher pay or directly measure job demand.
