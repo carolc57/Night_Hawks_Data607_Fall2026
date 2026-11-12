@@ -1,6 +1,6 @@
 ---
-title: "Project 3"
-author: "Carol Campbell0, Caresse Cross, Kingsley Kpoku"
+title: "Project 3 - Most Desired Data Science Skills"
+author: "Carol Campbell, Caresse Cross, Kingsley Kpoku"
 date: November 12, 2026
 format: html
 editor: visual
